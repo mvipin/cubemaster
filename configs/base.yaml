@@ -10,8 +10,8 @@ data:
   image_size: [40, 40]  # Native image size from hardware
   num_classes: 6
   class_names: ["B", "G", "O", "R", "W", "Y"]
-  num_workers: 4
-  pin_memory: true
+  num_workers: 2
+  pin_memory: false
 
 # Training Settings  
 training:

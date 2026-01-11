@@ -12,7 +12,7 @@ model:
 # Training Settings
 training:
   batch_size: 32
-  epochs: 100
+  epochs: 10
 
 optimizer:
   lr: 0.001

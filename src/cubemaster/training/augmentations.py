@@ -62,7 +62,7 @@ def get_train_transforms(
     
     # Noise
     if config.get("gaussian_noise", True):
-        transforms.append(A.GaussNoise(var_limit=(10.0, 50.0), p=0.3))
+        transforms.append(A.GaussNoise(std_range=(0.01, 0.05), p=0.3))
     
     # Normalize and convert to tensor
     if config.get("normalize", True):

@@ -20,13 +20,6 @@ wheels/
 .installed.cfg
 *.egg
 
-# Virtual environments
-venv/
-ENV/
-env/
-.venv/
-cubemaster_env/
-
 # IDE
 .idea/
 .vscode/
@@ -65,7 +58,6 @@ models/shallow_cnn/*.pt
 models/shallow_cnn/*.pth
 models/mobilenet/*.pt
 models/mobilenet/*.pth
-models/onnx/*.onnx
 models/legacy/*
 
 # Results (logs can be regenerated)

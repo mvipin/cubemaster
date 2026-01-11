@@ -1,0 +1,101 @@
+{
+  "model_name": "shallow_cnn",
+  "checkpoint_epoch": 9,
+  "best_val_acc": 97.02970297029702,
+  "test_metrics": {
+    "accuracy": 96.89922480620154,
+    "macro_precision": 97.61904761904763,
+    "macro_recall": 97.33333333333333,
+    "macro_f1": 97.26867335562987
+  },
+  "per_class_metrics": {
+    "B": {
+      "precision": 100.0,
+      "recall": 100.0,
+      "f1": 100.0,
+      "support": 16
+    },
+    "G": {
+      "precision": 100.0,
+      "recall": 100.0,
+      "f1": 100.0,
+      "support": 21
+    },
+    "O": {
+      "precision": 85.71428571428571,
+      "recall": 100.0,
+      "f1": 92.3076923076923,
+      "support": 24
+    },
+    "R": {
+      "precision": 100.0,
+      "recall": 84.0,
+      "f1": 91.30434782608697,
+      "support": 25
+    },
+    "W": {
+      "precision": 100.0,
+      "recall": 100.0,
+      "f1": 100.0,
+      "support": 17
+    },
+    "Y": {
+      "precision": 100.0,
+      "recall": 100.0,
+      "f1": 100.0,
+      "support": 26
+    }
+  },
+  "confusion_matrix": [
+    [
+      16,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      21,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      24,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      4,
+      21,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      17,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0,
+      26
+    ]
+  ],
+  "total_samples": 129,
+  "correct_predictions": 125
+}
