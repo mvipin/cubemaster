@@ -1,0 +1,65 @@
+# Base Configuration for CubeMaster Training
+# This file contains shared settings across all model architectures
+
+# Data Settings
+data:
+  root_dir: "data/processed"
+  train_dir: "train"
+  val_dir: "val"
+  test_dir: "test"
+  image_size: [40, 40]  # Native image size from hardware
+  num_classes: 6
+  class_names: ["B", "G", "O", "R", "W", "Y"]
+  num_workers: 4
+  pin_memory: true
+
+# Training Settings  
+training:
+  batch_size: 32
+  epochs: 100
+  early_stopping_patience: 15
+  save_best_only: true
+  
+# Optimizer Settings
+optimizer:
+  name: "adam"
+  lr: 0.001
+  weight_decay: 0.0001
+
+# Scheduler Settings
+scheduler:
+  name: "cosine"
+  T_max: 100
+  eta_min: 0.00001
+
+# Loss Settings
+loss:
+  name: "cross_entropy"
+  label_smoothing: 0.1
+
+# Augmentation Settings
+augmentation:
+  train:
+    horizontal_flip: true
+    vertical_flip: false
+    rotation_limit: 15
+    brightness_limit: 0.2
+    contrast_limit: 0.2
+    hue_shift_limit: 10
+    saturation_limit: 20
+    gaussian_noise: true
+    normalize: true
+  val:
+    normalize: true
+
+# Logging Settings
+logging:
+  tensorboard: true
+  log_interval: 10  # Log every N batches
+  save_interval: 5  # Save checkpoint every N epochs
+
+# Hardware Settings
+device: "auto"  # auto, cuda, cpu
+seed: 42
+deterministic: true
+

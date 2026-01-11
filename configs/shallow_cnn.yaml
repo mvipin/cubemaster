@@ -1,0 +1,25 @@
+# Shallow CNN Model Configuration
+# Inherits from base.yaml
+
+# Include base config
+_base_: "base.yaml"
+
+# Model Architecture
+model:
+  name: "shallow_cnn"
+  dropout_rate: 0.5
+
+# Training Settings
+training:
+  batch_size: 32
+  epochs: 100
+
+optimizer:
+  lr: 0.001
+
+# Output paths
+output:
+  model_dir: "models/shallow_cnn"
+  results_dir: "results/shallow_cnn"
+  tensorboard_dir: "results/tensorboard_logs/shallow_cnn"
+

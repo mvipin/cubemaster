@@ -1,0 +1,41 @@
+# MobileNetV3 Model Configuration
+# Inherits from base.yaml
+
+# Include base config
+_base_: "base.yaml"
+
+# Model Architecture
+model:
+  name: "mobilenet"
+  pretrained: true
+  freeze_backbone: true
+  dropout_rate: 0.2
+
+# Data override - MobileNet expects 224x224
+data:
+  image_size: [224, 224]
+
+# Training Settings - Two-phase training
+training:
+  batch_size: 16  # Smaller batch due to larger model
+  epochs: 50      # Phase 1: frozen backbone
+  
+  # Phase 2: Fine-tuning (run separately with freeze_backbone: false)
+  finetune:
+    epochs: 30
+    lr: 0.00001
+
+optimizer:
+  lr: 0.001  # Higher LR for classifier head
+  weight_decay: 0.01
+
+scheduler:
+  name: "cosine"
+  T_max: 50
+
+# Output paths
+output:
+  model_dir: "models/mobilenet"
+  results_dir: "results/mobilenet"
+  tensorboard_dir: "results/tensorboard_logs/mobilenet"
+

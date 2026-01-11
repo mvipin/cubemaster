@@ -1,0 +1,26 @@
+# MLP Model Configuration
+# Inherits from base.yaml
+
+# Include base config
+_base_: "base.yaml"
+
+# Model Architecture
+model:
+  name: "mlp"
+  hidden_dims: [256, 128]
+  dropout_rate: 0.3
+
+# Training Overrides (MLP may need different hyperparams)
+training:
+  batch_size: 64
+  epochs: 150
+
+optimizer:
+  lr: 0.0005
+
+# Output paths
+output:
+  model_dir: "models/mlp"
+  results_dir: "results/mlp"
+  tensorboard_dir: "results/tensorboard_logs/mlp"
+

@@ -1,0 +1,89 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cubemaster"
+version = "0.1.0"
+description = "PyTorch-based Rubik's Cube Color Classification System"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Vipin Mehta", email = "vipin@example.com"}
+]
+requires-python = ">=3.9"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+keywords = ["robotics", "computer-vision", "pytorch", "rubiks-cube"]
+
+dependencies = [
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    "torchmetrics>=1.0.0",
+    "albumentations>=1.3.0",
+    "Pillow>=9.5.0",
+    "numpy>=1.24.0",
+    "pyyaml>=6.0",
+    "tqdm>=4.65.0",
+]
+
+[project.optional-dependencies]
+training = [
+    "tensorboard>=2.13.0",
+    "matplotlib>=3.7.0",
+    "seaborn>=0.12.0",
+    "scikit-learn>=1.2.0",
+]
+export = [
+    "onnx>=1.14.0",
+    "onnxruntime>=1.15.0",
+]
+profiling = [
+    "thop>=0.1.0",
+    "fvcore>=0.1.5",
+]
+dev = [
+    "pytest>=7.3.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.3.0",
+    "ruff>=0.0.270",
+    "mypy>=1.3.0",
+    "pre-commit>=3.3.0",
+]
+all = ["cubemaster[training,export,profiling,dev]"]
+
+[project.scripts]
+cubemaster-train = "cubemaster.training.train:main"
+cubemaster-evaluate = "cubemaster.evaluation.evaluate:main"
+cubemaster-predict = "cubemaster.inference.predict:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 100
+target-version = ["py39", "py310", "py311"]
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I", "N", "W"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+addopts = "-v --tb=short"
+

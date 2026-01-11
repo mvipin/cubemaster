@@ -1,0 +1,80 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+cubemaster_env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Data (don't commit large data files)
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/processed/train/.gitkeep
+!data/processed/val/.gitkeep
+!data/processed/test/.gitkeep
+
+# Model weights (can be large)
+models/mlp/*.pt
+models/mlp/*.pth
+models/shallow_cnn/*.pt
+models/shallow_cnn/*.pth
+models/mobilenet/*.pt
+models/mobilenet/*.pth
+models/onnx/*.onnx
+models/legacy/*
+
+# Results (logs can be regenerated)
+results/tensorboard_logs/
+results/*/training_curves.png
+results/*/confusion_matrix.png
+
+# OS
+.DS_Store
+Thumbs.db
+
