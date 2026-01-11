@@ -50,14 +50,13 @@ htmlcov/
 .dmypy.json
 dmypy.json
 
-# Data (don't commit large data files)
+# Data - raw files excluded, processed tracked via Git LFS
 data/raw/*
-data/processed/*
 !data/raw/.gitkeep
-!data/processed/.gitkeep
-!data/processed/train/.gitkeep
-!data/processed/val/.gitkeep
-!data/processed/test/.gitkeep
+
+# Processed data is tracked via Git LFS (see .gitattributes)
+# Uncomment below to exclude processed data from git:
+# data/processed/*
 
 # Model weights (can be large)
 models/mlp/*.pt
