@@ -203,7 +203,11 @@ class Trainer:
             # Update scheduler
             current_lr = self.optimizer.param_groups[0]["lr"]
             if self.scheduler:
-                self.scheduler.step()
+                # ReduceLROnPlateau requires metric, other schedulers don't
+                if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                    self.scheduler.step(val_metrics["acc"])
+                else:
+                    self.scheduler.step()
 
             # Record history
             self.history["train_loss"].append(train_metrics["loss"])
