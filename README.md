@@ -72,6 +72,7 @@ The system captures cube images in two orientations (U,L,F then D,R,B faces) usi
 - **[5. Evaluation & Comparison](#evaluation--comparison)**
   - [Evaluation Script](#evaluation-script)
   - [Output Files](#output-files)
+  - [MLP Test Results](#mlp-test-results)
   - [Shallow CNN Test Results](#shallow-cnn-test-results)
 
 - **[6. Installation & Quick Start](#installation--quick-start)**
@@ -892,11 +893,13 @@ CubeMaster provides three model architectures optimized for different deployment
 
 ### Model Comparison Summary
 
-| Model | Parameters | Input Size | Target Accuracy | Use Case |
-|-------|------------|------------|-----------------|----------|
-| **MLP** | ~1.3M | 40×40 | 85-92% | Baseline, interpretability |
-| **Shallow CNN** | ~80K | 40×40 | 95-98% | Edge deployment, real-time |
-| **MobileNetV3** | ~1.5M | 224×224 | 98-99.5% | Maximum accuracy |
+| Model | Parameters | Input Size | Test Accuracy | Use Case |
+|-------|------------|------------|---------------|----------|
+| **MLP** | ~1.3M | 40×40 | 93.80% | Baseline, interpretability |
+| **Shallow CNN** | ~80K | 40×40 | 96.90% | Edge deployment, real-time |
+| **MobileNetV3** | ~1.5M | 224×224 | 98-99.5%* | Maximum accuracy |
+
+*MobileNetV3 accuracy is target/expected; actual results pending training.
 
 ### 1. MLP (Multi-Layer Perceptron)
 
@@ -934,7 +937,7 @@ model:
   dropout_rate: 0.3
 training:
   batch_size: 64
-  epochs: 150
+  epochs: 10
 optimizer:
   lr: 0.0005
 ```
@@ -1168,6 +1171,42 @@ results/{model_name}/
 ├── confusion_matrix.png    # Confusion matrix heatmap
 └── training_curves.png     # Loss and accuracy curves
 ```
+
+### MLP Test Results
+
+Based on evaluation on the held-out test set (129 samples) after 10 epochs of training:
+
+| Metric | Value |
+|--------|-------|
+| **Overall Accuracy** | **93.80%** |
+| Macro Precision | 94.49% |
+| Macro Recall | 93.73% |
+| Macro F1 | 93.53% |
+
+#### Per-Class Performance
+
+| Class | Precision | Recall | F1 | Support |
+|-------|-----------|--------|-----|---------|
+| B (Blue) | 84.21% | 100.00% | 91.43% | 16 |
+| G (Green) | 100.00% | 100.00% | 100.00% | 21 |
+| O (Orange) | 82.76% | 100.00% | 90.57% | 24 |
+| R (Red) | 100.00% | 80.00% | 88.89% | 25 |
+| W (White) | 100.00% | 82.35% | 90.32% | 17 |
+| Y (Yellow) | 100.00% | 100.00% | 100.00% | 26 |
+
+#### Confusion Matrix
+
+<p align="center">
+  <img src="results/mlp/confusion_matrix.png" alt="MLP Confusion Matrix" width="600">
+</p>
+
+**Analysis**: The MLP model shows primary confusion between Red→Orange (5 samples) and White→Blue (3 samples). Despite having ~1.3M parameters, the lack of spatial feature extraction limits its ability to distinguish spectrally similar colors compared to CNN architectures.
+
+#### Training Curves
+
+<p align="center">
+  <img src="results/mlp/training_curves.png" alt="MLP Training Curves" width="800">
+</p>
 
 ### Shallow CNN Test Results
 

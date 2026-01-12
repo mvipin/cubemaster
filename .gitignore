@@ -62,8 +62,6 @@ models/legacy/*
 
 # Results (logs can be regenerated)
 results/tensorboard_logs/
-results/*/training_curves.png
-results/*/confusion_matrix.png
 
 # OS
 .DS_Store
