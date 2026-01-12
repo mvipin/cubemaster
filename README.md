@@ -74,6 +74,7 @@ The system captures cube images in two orientations (U,L,F then D,R,B faces) usi
   - [Output Files](#output-files)
   - [MLP Test Results](#mlp-test-results)
   - [Shallow CNN Test Results](#shallow-cnn-test-results)
+  - [MobileNetV3 Test Results](#mobilenetv3-test-results)
 
 - **[6. Installation & Quick Start](#installation--quick-start)**
   - [Prerequisites](#prerequisites)
@@ -897,9 +898,9 @@ CubeMaster provides three model architectures optimized for different deployment
 |-------|------------|------------|---------------|----------|
 | **MLP** | ~1.3M | 40×40 | 93.80% | Baseline, interpretability |
 | **Shallow CNN** | ~80K | 40×40 | 96.90% | Edge deployment, real-time |
-| **MobileNetV3** | ~1.5M | 224×224 | 98-99.5%* | Maximum accuracy |
+| **MobileNetV3** | ~1.1M | 224×224 | 93.80% | Transfer learning baseline |
 
-*MobileNetV3 accuracy is target/expected; actual results pending training.
+**Note**: MobileNetV3 results are from 10 epochs with frozen backbone (Phase 1 only). Fine-tuning the full network typically improves accuracy to 97-99%.
 
 ### 1. MLP (Multi-Layer Perceptron)
 
@@ -1043,7 +1044,7 @@ data:
   image_size: [224, 224]
 training:
   batch_size: 16
-  epochs: 50
+  epochs: 10
 ```
 
 ---
@@ -1242,6 +1243,42 @@ Based on evaluation on the held-out test set (129 samples):
 
 <p align="center">
   <img src="results/shallow_cnn/training_curves.png" alt="Training Curves" width="800">
+</p>
+
+### MobileNetV3 Test Results
+
+Based on evaluation on the held-out test set (129 samples) after 10 epochs of training with frozen backbone:
+
+| Metric | Value |
+|--------|-------|
+| **Overall Accuracy** | **93.80%** |
+| Macro Precision | 95.04% |
+| Macro Recall | 94.38% |
+| Macro F1 | 94.45% |
+
+#### Per-Class Performance
+
+| Class | Precision | Recall | F1 | Support |
+|-------|-----------|--------|-----|---------|
+| B (Blue) | 100.00% | 100.00% | 100.00% | 16 |
+| G (Green) | 100.00% | 90.48% | 95.00% | 21 |
+| O (Orange) | 82.14% | 95.83% | 88.46% | 24 |
+| R (Red) | 95.24% | 80.00% | 86.96% | 25 |
+| W (White) | 100.00% | 100.00% | 100.00% | 17 |
+| Y (Yellow) | 92.86% | 100.00% | 96.30% | 26 |
+
+#### Confusion Matrix
+
+<p align="center">
+  <img src="results/mobilenet/confusion_matrix.png" alt="MobileNetV3 Confusion Matrix" width="600">
+</p>
+
+**Analysis**: MobileNetV3 shows confusion primarily between Red→Orange (5 samples) and Green→Yellow (2 samples). With only the classifier head trained (backbone frozen), the model achieves comparable accuracy to MLP but with better macro F1 (94.45% vs 93.53%). Fine-tuning the full network would likely improve results.
+
+#### Training Curves
+
+<p align="center">
+  <img src="results/mobilenet/training_curves.png" alt="MobileNetV3 Training Curves" width="800">
 </p>
 
 ---

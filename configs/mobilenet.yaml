@@ -18,7 +18,7 @@ data:
 # Training Settings - Two-phase training
 training:
   batch_size: 16  # Smaller batch due to larger model
-  epochs: 50      # Phase 1: frozen backbone
+  epochs: 10      # Phase 1: frozen backbone
   
   # Phase 2: Fine-tuning (run separately with freeze_backbone: false)
   finetune:
@@ -31,7 +31,7 @@ optimizer:
 
 scheduler:
   name: "cosine"
-  T_max: 50
+  T_max: 10
 
 # Output paths
 output:
