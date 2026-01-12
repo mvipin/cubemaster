@@ -58,6 +58,16 @@ logging:
   log_interval: 10  # Log every N batches
   save_interval: 5  # Save checkpoint every N epochs
 
+# Weights & Biases Settings
+wandb:
+  enabled: false  # Set to true to enable wandb logging
+  project: "cubemaster"
+  entity: null  # Your wandb username or team name (null = default)
+  name: null  # Run name (null = auto-generated)
+  tags: []  # Tags for organizing runs
+  notes: null  # Optional notes for the run
+  log_model: false  # Whether to log model checkpoints to wandb
+
 # Hardware Settings
 device: "auto"  # auto, cuda, cpu
 seed: 42

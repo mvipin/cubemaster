@@ -1,0 +1,68 @@
+# Wandb Sweep Configuration for MobileNetV3 Model
+# Usage: python scripts/run_sweep.py --config configs/sweeps/mobilenet_sweep.yaml
+
+program: scripts/train.py
+method: bayes  # bayes, random, or grid
+metric:
+  name: val_acc
+  goal: maximize
+
+parameters:
+  # Base config to use
+  config:
+    value: configs/mobilenet.yaml
+  
+  # Enable wandb for sweep runs
+  wandb:
+    value: true
+
+  # Learning rate (log-uniform distribution)
+  lr:
+    distribution: log_uniform_values
+    min: 0.0001
+    max: 0.01
+  
+  # Batch size (categorical) - smaller due to larger model
+  batch_size:
+    values: [8, 16, 32]
+  
+  # Dropout rate (uniform distribution)
+  dropout_rate:
+    distribution: uniform
+    min: 0.1
+    max: 0.4
+  
+  # Weight decay (log-uniform)
+  weight_decay:
+    distribution: log_uniform_values
+    min: 0.0001
+    max: 0.1
+
+  # Optimizer choice
+  optimizer:
+    values: [adam, adamw]
+
+  # Freeze backbone or fine-tune
+  freeze_backbone:
+    values: [true, false]
+
+  # Label smoothing
+  label_smoothing:
+    distribution: uniform
+    min: 0.0
+    max: 0.15
+
+  # Scheduler choice
+  scheduler:
+    values: [cosine, step]
+
+# Early termination for poorly performing runs
+early_terminate:
+  type: hyperband
+  min_iter: 3
+  eta: 3
+  s: 2
+
+# Run settings
+run_cap: 30  # Maximum number of runs (fewer due to slower training)
+

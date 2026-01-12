@@ -1,7 +1,7 @@
 """Training infrastructure for color classification models."""
 
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 import time
 import json
 
@@ -11,6 +11,13 @@ from torch.utils.data import DataLoader
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import _LRScheduler
 from tqdm import tqdm
+
+# Optional wandb import
+try:
+    import wandb
+    WANDB_AVAILABLE = True
+except ImportError:
+    WANDB_AVAILABLE = False
 
 
 class EarlyStopping:
@@ -62,7 +69,7 @@ class EarlyStopping:
 
 class Trainer:
     """Training loop manager for color classification models."""
-    
+
     def __init__(
         self,
         model: nn.Module,
@@ -73,9 +80,11 @@ class Trainer:
         early_stopping: Optional[EarlyStopping] = None,
         checkpoint_dir: Optional[Path] = None,
         log_interval: int = 10,
+        use_wandb: bool = False,
+        wandb_config: Optional[Dict[str, Any]] = None,
     ):
         """Initialize trainer.
-        
+
         Args:
             model: PyTorch model to train
             optimizer: Optimizer instance
@@ -85,6 +94,8 @@ class Trainer:
             early_stopping: Early stopping instance
             checkpoint_dir: Directory to save checkpoints
             log_interval: Log every N batches
+            use_wandb: Whether to log to Weights & Biases
+            wandb_config: Wandb configuration dict (log_model, etc.)
         """
         self.model = model.to(device)
         self.optimizer = optimizer
@@ -94,7 +105,9 @@ class Trainer:
         self.early_stopping = early_stopping
         self.checkpoint_dir = Path(checkpoint_dir) if checkpoint_dir else None
         self.log_interval = log_interval
-        
+        self.use_wandb = use_wandb and WANDB_AVAILABLE
+        self.wandb_config = wandb_config or {}
+
         self.history: Dict[str, list] = {
             "train_loss": [], "train_acc": [],
             "val_loss": [], "val_acc": [],
@@ -102,9 +115,13 @@ class Trainer:
         }
         self.best_val_acc = 0.0
         self.current_epoch = 0
-        
+
         if self.checkpoint_dir:
             self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
+        # Watch model with wandb for gradient logging
+        if self.use_wandb and wandb.run is not None:
+            wandb.watch(self.model, log="gradients", log_freq=100)
     
     def train_epoch(self, train_loader: DataLoader) -> Dict[str, float]:
         """Train for one epoch."""
@@ -195,6 +212,18 @@ class Trainer:
             self.history["val_acc"].append(val_metrics["acc"])
             self.history["lr"].append(current_lr)
 
+            # Log to wandb
+            if self.use_wandb and wandb.run is not None:
+                wandb.log({
+                    "epoch": epoch,
+                    "train_loss": train_metrics["loss"],
+                    "train_acc": train_metrics["acc"],
+                    "val_loss": val_metrics["loss"],
+                    "val_acc": val_metrics["acc"],
+                    "learning_rate": current_lr,
+                    "best_val_acc": self.best_val_acc,
+                })
+
             # Print epoch summary
             elapsed = time.time() - epoch_start
             print(
@@ -210,6 +239,10 @@ class Trainer:
                 self.save_checkpoint("best.pt")
                 print(f"  → New best model saved (val_acc: {self.best_val_acc:.2f}%)")
 
+                # Log best model to wandb if configured
+                if self.use_wandb and self.wandb_config.get("log_model") and wandb.run is not None:
+                    wandb.save(str(self.checkpoint_dir / "best.pt"))
+
             # Early stopping
             if self.early_stopping:
                 if self.early_stopping(val_metrics["loss"]):
@@ -219,6 +252,13 @@ class Trainer:
         # Save final model
         self.save_checkpoint("last.pt")
         self.save_history()
+
+        # Log final summary to wandb
+        if self.use_wandb and wandb.run is not None:
+            wandb.run.summary["best_val_acc"] = self.best_val_acc
+            wandb.run.summary["final_train_loss"] = self.history["train_loss"][-1]
+            wandb.run.summary["final_val_loss"] = self.history["val_loss"][-1]
+            wandb.run.summary["total_epochs"] = self.current_epoch + 1
 
         return self.history
 

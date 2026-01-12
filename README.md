@@ -68,6 +68,7 @@ The system captures cube images in two orientations (U,L,F then D,R,B faces) usi
   - [Training Script Usage](#training-script-usage)
   - [Early Stopping](#early-stopping)
   - [Checkpoint Management](#checkpoint-management)
+  - [Weights & Biases Integration](#weights--biases-integration)
 
 - **[5. Evaluation & Comparison](#evaluation--comparison)**
   - [Evaluation Script](#evaluation-script)
@@ -1146,6 +1147,120 @@ Checkpoint contents:
     }
 }
 ```
+
+### Weights & Biases Integration
+
+CubeMaster supports [Weights & Biases](https://wandb.ai/) (wandb) for experiment tracking and hyperparameter sweeps.
+
+#### Setup
+
+```bash
+# Install wandb
+pip install wandb
+
+# Login to wandb (first time only)
+wandb login
+```
+
+#### Basic Usage
+
+Enable wandb logging during training:
+
+```bash
+# Enable with command-line flag
+python scripts/train.py --config configs/shallow_cnn.yaml --wandb
+
+# Specify project/entity
+python scripts/train.py --config configs/shallow_cnn.yaml \
+    --wandb \
+    --wandb-project cubemaster \
+    --wandb-entity your-username
+```
+
+Or enable in config file (`configs/base.yaml`):
+
+```yaml
+wandb:
+  enabled: true
+  project: "cubemaster"
+  entity: null  # Your wandb username or team
+  name: null    # Auto-generated run name
+  tags: []      # Optional tags
+  log_model: false  # Log model checkpoints to wandb
+```
+
+#### Hyperparameter Sweeps
+
+Sweep configurations are provided for each model architecture:
+
+```
+configs/sweeps/
+├── mlp_sweep.yaml         # MLP hyperparameter search
+├── shallow_cnn_sweep.yaml # CNN hyperparameter search
+└── mobilenet_sweep.yaml   # MobileNet hyperparameter search
+```
+
+**Example sweep config** (`configs/sweeps/mlp_sweep.yaml`):
+```yaml
+method: bayes  # bayes, random, or grid
+metric:
+  name: val_acc
+  goal: maximize
+
+parameters:
+  lr:
+    distribution: log_uniform_values
+    min: 0.00001
+    max: 0.01
+  batch_size:
+    values: [16, 32, 64, 128]
+  dropout_rate:
+    distribution: uniform
+    min: 0.1
+    max: 0.5
+  hidden_dims:
+    values:
+      - [256, 128]
+      - [512, 256]
+      - [512, 256, 128]
+```
+
+**Running sweeps:**
+
+```bash
+# Create and run a sweep
+python scripts/run_sweep.py --sweep-config configs/sweeps/mlp_sweep.yaml
+
+# Join an existing sweep
+python scripts/run_sweep.py --sweep-id your-sweep-id
+
+# Run with limited count
+python scripts/run_sweep.py --sweep-config configs/sweeps/mlp_sweep.yaml --count 20
+
+# Preview sweep config without running
+python scripts/run_sweep.py --sweep-config configs/sweeps/mlp_sweep.yaml --dry-run
+```
+
+#### Logged Metrics
+
+The following metrics are logged to wandb:
+
+| Metric | Description |
+|--------|-------------|
+| `train_loss` | Training loss per epoch |
+| `train_acc` | Training accuracy per epoch |
+| `val_loss` | Validation loss per epoch |
+| `val_acc` | Validation accuracy per epoch |
+| `learning_rate` | Current learning rate |
+| `best_val_acc` | Best validation accuracy achieved |
+
+#### Viewing Results
+
+Access your experiments at [wandb.ai](https://wandb.ai/):
+- Compare runs across hyperparameters
+- View training curves and metrics
+- Analyze sweep results with parallel coordinates
+- Export data for further analysis
 
 ---
 

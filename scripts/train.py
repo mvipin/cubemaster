@@ -5,11 +5,18 @@ Usage:
     python scripts/train.py --config configs/shallow_cnn.yaml
     python scripts/train.py --config configs/mlp.yaml
     python scripts/train.py --config configs/mobilenet.yaml
+
+    # With wandb logging:
+    python scripts/train.py --config configs/shallow_cnn.yaml --wandb
+
+    # For sweep agent (called automatically by wandb):
+    python scripts/train.py --config configs/shallow_cnn.yaml --wandb --sweep
 """
 
 import argparse
 import sys
 from pathlib import Path
+from typing import Dict, Any
 
 import torch
 import torch.nn as nn
@@ -18,7 +25,6 @@ from torch.utils.data import DataLoader
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from cubemaster import COLOR_CLASSES
 from cubemaster.utils.config import load_config, get_device, set_seed
 from cubemaster.models.shallow_cnn import ShallowCNNClassifier
 from cubemaster.models.mlp import MLPClassifier
@@ -26,7 +32,13 @@ from cubemaster.models.mobilenet import MobileNetV3Classifier
 from cubemaster.training.dataset import CubeColorDataset
 from cubemaster.training.augmentations import get_train_transforms, get_val_transforms
 from cubemaster.training.trainer import Trainer, EarlyStopping
-from cubemaster.evaluation.metrics import evaluate_model
+
+# Optional wandb import
+try:
+    import wandb
+    WANDB_AVAILABLE = True
+except ImportError:
+    WANDB_AVAILABLE = False
 
 
 MODEL_REGISTRY = {
@@ -59,7 +71,96 @@ def parse_args():
         default=None,
         help="Override device (auto, cuda, cpu)",
     )
+    # Wandb arguments
+    parser.add_argument(
+        "--wandb",
+        action="store_true",
+        help="Enable Weights & Biases logging",
+    )
+    parser.add_argument(
+        "--sweep",
+        action="store_true",
+        help="Running as wandb sweep agent (uses wandb.config for hyperparams)",
+    )
+    parser.add_argument(
+        "--wandb-project",
+        type=str,
+        default=None,
+        help="Wandb project name (overrides config)",
+    )
+    parser.add_argument(
+        "--wandb-entity",
+        type=str,
+        default=None,
+        help="Wandb entity/team name (overrides config)",
+    )
+    parser.add_argument(
+        "--wandb-name",
+        type=str,
+        default=None,
+        help="Wandb run name (overrides config)",
+    )
     return parser.parse_args()
+
+
+def apply_sweep_config(cfg: Dict[str, Any], sweep_config: Dict[str, Any]) -> Dict[str, Any]:
+    """Apply wandb sweep parameters to the config.
+
+    Args:
+        cfg: Base configuration dictionary
+        sweep_config: Wandb sweep config (from wandb.config)
+
+    Returns:
+        Updated configuration dictionary
+    """
+    # Learning rate
+    if "lr" in sweep_config:
+        cfg["optimizer"]["lr"] = sweep_config["lr"]
+
+    # Batch size
+    if "batch_size" in sweep_config:
+        cfg["training"]["batch_size"] = sweep_config["batch_size"]
+
+    # Dropout rate
+    if "dropout_rate" in sweep_config:
+        cfg["model"]["dropout_rate"] = sweep_config["dropout_rate"]
+
+    # Hidden dimensions (MLP)
+    if "hidden_dims" in sweep_config:
+        cfg["model"]["hidden_dims"] = sweep_config["hidden_dims"]
+
+    # Weight decay
+    if "weight_decay" in sweep_config:
+        cfg["optimizer"]["weight_decay"] = sweep_config["weight_decay"]
+
+    # Optimizer
+    if "optimizer" in sweep_config:
+        cfg["optimizer"]["name"] = sweep_config["optimizer"]
+
+    # Label smoothing
+    if "label_smoothing" in sweep_config:
+        cfg["loss"]["label_smoothing"] = sweep_config["label_smoothing"]
+
+    # Freeze backbone (MobileNet)
+    if "freeze_backbone" in sweep_config:
+        cfg["model"]["freeze_backbone"] = sweep_config["freeze_backbone"]
+
+    # Scheduler
+    if "scheduler" in sweep_config:
+        cfg["scheduler"]["name"] = sweep_config["scheduler"]
+
+    # Augmentation settings
+    if "rotation_limit" in sweep_config:
+        if "augmentation" not in cfg:
+            cfg["augmentation"] = {"train": {}}
+        cfg["augmentation"]["train"]["rotation_limit"] = sweep_config["rotation_limit"]
+
+    if "brightness_limit" in sweep_config:
+        if "augmentation" not in cfg:
+            cfg["augmentation"] = {"train": {}}
+        cfg["augmentation"]["train"]["brightness_limit"] = sweep_config["brightness_limit"]
+
+    return cfg
 
 
 def build_model(cfg: dict) -> nn.Module:
@@ -129,12 +230,70 @@ def build_scheduler(optimizer, cfg: dict):
         raise ValueError(f"Unknown scheduler: {name}")
 
 
+def init_wandb(args, cfg: Dict[str, Any]) -> bool:
+    """Initialize wandb if enabled.
+
+    Args:
+        args: Command line arguments
+        cfg: Configuration dictionary
+
+    Returns:
+        True if wandb is initialized, False otherwise
+    """
+    # Check if wandb should be enabled
+    use_wandb = args.wandb or cfg.get("wandb", {}).get("enabled", False)
+
+    if not use_wandb:
+        return False
+
+    if not WANDB_AVAILABLE:
+        print("Warning: wandb not installed. Install with: pip install wandb")
+        return False
+
+    # Get wandb config from args or config file
+    wandb_cfg = cfg.get("wandb", {})
+    project = args.wandb_project or wandb_cfg.get("project", "cubemaster")
+    entity = args.wandb_entity or wandb_cfg.get("entity")
+    name = args.wandb_name or wandb_cfg.get("name")
+    tags = wandb_cfg.get("tags", [])
+    notes = wandb_cfg.get("notes")
+
+    # Add model name to tags
+    model_name = cfg.get("model", {}).get("name", "unknown")
+    if model_name not in tags:
+        tags = tags + [model_name]
+
+    # Initialize wandb
+    wandb.init(
+        project=project,
+        entity=entity,
+        name=name,
+        tags=tags,
+        notes=notes,
+        config=cfg,  # Log full config
+        settings=wandb.Settings(reinit="finish_previous"),  # Allow reinit for sweeps
+    )
+
+    print(f"Wandb initialized: {wandb.run.url}")
+    return True
+
+
 def main():
     """Main training entry point."""
     args = parse_args()
 
     # Load config
     cfg = load_config(args.config)
+
+    # Initialize wandb (before applying sweep config)
+    use_wandb = init_wandb(args, cfg)
+
+    # Apply sweep config if running as sweep agent
+    if args.sweep and use_wandb and WANDB_AVAILABLE:
+        sweep_config = dict(wandb.config)
+        cfg = apply_sweep_config(cfg, sweep_config)
+        print(f"Applied sweep config: {sweep_config}")
+
     print(f"Training model: {cfg['model']['name']}")
 
     # Setup device and seed
@@ -193,6 +352,9 @@ def main():
     output_cfg = cfg.get("output", {})
     checkpoint_dir = Path(output_cfg.get("model_dir", f"models/{cfg['model']['name']}"))
 
+    # Wandb config for trainer
+    wandb_cfg = cfg.get("wandb", {})
+
     # Create trainer
     trainer = Trainer(
         model=model,
@@ -203,6 +365,8 @@ def main():
         early_stopping=early_stopping,
         checkpoint_dir=checkpoint_dir,
         log_interval=cfg.get("logging", {}).get("log_interval", 10),
+        use_wandb=use_wandb,
+        wandb_config=wandb_cfg,
     )
 
     # Resume from checkpoint
@@ -220,6 +384,10 @@ def main():
     print("=" * 80)
     print(f"Training complete. Best val accuracy: {trainer.best_val_acc:.2f}%")
     print(f"Checkpoints saved to: {checkpoint_dir}")
+
+    # Finish wandb run
+    if use_wandb and WANDB_AVAILABLE:
+        wandb.finish()
 
 
 if __name__ == "__main__":
