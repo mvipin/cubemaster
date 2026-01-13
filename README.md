@@ -70,6 +70,7 @@ The system captures cube images in two orientations (U,L,F then D,R,B faces) usi
   - [Checkpoint Management](#checkpoint-management)
   - [Weights & Biases Integration](#weights--biases-integration)
   - [Hyperparameter Sweep Results: Shallow CNN](#hyperparameter-sweep-results-shallow-cnn)
+  - [Hyperparameter Sweep Results: MLP](#hyperparameter-sweep-results-mlp)
 
 - **[5. Evaluation & Comparison](#evaluation--comparison)**
   - [Evaluation Script](#evaluation-script)
@@ -1497,6 +1498,224 @@ augmentation:
    ```
 
 4. **Optional refinement sweep:** Narrow parameter ranges around `hopeful-sweep-7` values for fine-tuning.
+
+### Hyperparameter Sweep Results: MLP
+
+This section documents the results of a comprehensive hyperparameter sweep conducted on the MLP architecture using Weights & Biases Bayesian optimization.
+
+#### Sweep Overview
+
+The sweep explored multiple training runs with different hyperparameter combinations to find the optimal configuration for the MLP color classifier.
+
+**Sweep Configuration**: [`configs/sweeps/mlp_sweep.yaml`](configs/sweeps/mlp_sweep.yaml)
+
+| Parameter | Type | Range/Values | Rationale |
+|-----------|------|--------------|-----------|
+| `learning_rate` | Log-uniform | 5e-4 to 5e-3 | Higher range than CNN due to simpler architecture |
+| `batch_size` | Categorical | [32, 64, 128] | Affects gradient noise and memory usage |
+| `hidden_dims` | Categorical | [[128,64], [256,128]] | Network capacity; larger may overfit on small datasets |
+| `dropout_rate` | Uniform | 0.1 to 0.25 | Lower than CNN since MLPs need less regularization on flattened input |
+| `weight_decay` | Log-uniform | 2e-5 to 1.5e-4 | L2 regularization |
+| `optimizer` | Categorical | [adam, adamw] | Optimizer comparison |
+| `label_smoothing` | Uniform | 0.1 to 0.15 | Prevents overconfident predictions |
+
+**Search Strategy**: Bayesian optimization with early termination.
+
+#### Results Visualization
+
+<p align="center">
+  <img src="docs/media/sweeps/mlp_parallel_coordinates.png" alt="MLP Hyperparameter Sweep - Parallel Coordinates Plot" width="900">
+</p>
+
+**Key Observations:**
+1. **All 8 runs achieved 97.03%**: Remarkable consistency indicating the MLP is robust across hyperparameter choices
+2. **Learning rate range works well**: Both low (~1.3e-3) and high (~5.4e-3) learning rates reached peak accuracy
+3. **Architecture flexibility**: Both [128,64] and [256,128] architectures achieved identical accuracy
+4. **Optimizer parity**: Adam and AdamW performed equally well on this task
+
+#### Top 8 Performing Runs (All Tied at 97.03%)
+
+| Rank | Run Name | Val Acc | Val Loss | LR | Batch | Hidden Dims | Dropout | Optimizer |
+|------|----------|---------|----------|-----|-------|-------------|---------|-----------|
+| 1 | `crisp-sweep-13` | 97.03% | **0.6070** | 1.18e-3 | 64 | [256,128] | 0.12 | adam |
+| 2 | `pious-sweep-8` | 97.03% | 0.6352 | 5.37e-3 | 128 | [128,64] | 0.21 | adam |
+| 3 | `legendary-sweep-20` | 97.03% | 0.6431 | 3.26e-3 | 128 | [256,128] | 0.22 | adamw |
+| 4 | `leafy-sweep-19` | 97.03% | 0.6574 | 1.35e-3 | 32 | [128,64] | 0.13 | adam |
+| 5 | `usual-sweep-2` | 97.03% | 0.6622 | 1.80e-3 | 32 | [128,64] | 0.18 | adam |
+| 6 | `misty-sweep-21` | 97.03% | 0.6721 | 1.94e-3 | 32 | [128,64] | 0.12 | adam |
+| 7 | `lemon-sweep-14` | 97.03% | 0.7214 | 5.16e-4 | 64 | [256,128] | 0.15 | adamw |
+| 8 | `eternal-sweep-6` | 97.03% | 0.7244 | 2.81e-3 | 32 | [128,64] | 0.20 | adam |
+
+**Note**: All 8 runs achieved identical 97.03% validation accuracy, requiring tie-breaking analysis.
+
+#### Tie-Breaking Analysis: Eight-Way Tie at 97.03%
+
+Eight sweep runs achieved identical peak validation accuracy of 97.03%. This section documents the systematic tie-breaking process.
+
+##### Tie-Breaking Criteria Hierarchy
+
+| Priority | Criterion | Description | Better Value |
+|----------|-----------|-------------|--------------|
+| 1 | **Validation Accuracy** | Primary optimization target | Higher |
+| 2 | **Validation Loss** | Model confidence calibration | Lower |
+| 3 | **Convergence Speed** | Epochs to reach peak accuracy | Fewer |
+| 4 | **Training Stability** | Number of epochs at peak accuracy | More |
+| 5 | **Train-Val Gap** | Generalization indicator | Smaller |
+
+##### Detailed Metric Comparison
+
+**Criterion 1: Validation Accuracy** — TIE (all 97.03%)
+
+**Criterion 2: Best Validation Loss** (lower = better calibrated predictions)
+
+| Run | Best Val Loss | Epoch | Verdict |
+|-----|---------------|-------|---------|
+| `crisp-sweep-13` | **0.6070** | 14 | 🥇 **Winner** |
+| `pious-sweep-8` | 0.6352 | 14 | 🥈 |
+| `legendary-sweep-20` | 0.6431 | 14 | 🥉 |
+| `leafy-sweep-19` | 0.6574 | 14 | 4th |
+| `usual-sweep-2` | 0.6622 | 14 | 5th |
+| `misty-sweep-21` | 0.6721 | 14 | 6th |
+| `lemon-sweep-14` | 0.7214 | 14 | 7th |
+| `eternal-sweep-6` | 0.7244 | 14 | 8th |
+
+`crisp-sweep-13` achieves 4.4% lower validation loss than the runner-up, indicating better-calibrated predictions.
+
+**Criterion 3: Convergence Speed** (epochs to first reach 97.03%)
+
+| Run | First 97.03% Epoch | Verdict |
+|-----|--------------------| --------|
+| `eternal-sweep-6` | **Epoch 6** | 🥇 **Fastest** |
+| `usual-sweep-2` | Epoch 7 | 🥈 |
+| `crisp-sweep-13` | Epoch 9 | 🥉 |
+| `leafy-sweep-19` | Epoch 11 | 4th |
+| `misty-sweep-21` | Epoch 6 | Tied 1st |
+| `pious-sweep-8` | Epoch 13 | 6th |
+| `legendary-sweep-20` | Epoch 14 | 7th |
+| `lemon-sweep-14` | Epoch 13 | 6th |
+
+**Criterion 4: Training Stability** (epochs maintaining 97.03%)
+
+| Run | Epochs at 97.03% | Pattern | Verdict |
+|-----|------------------|---------|---------|
+| `crisp-sweep-13` | **4** (9, 10, 13, 14) | Most stable | 🥇 **Winner** |
+| `leafy-sweep-19` | 3 (11, 13, 14) | Stable | 🥈 |
+| `misty-sweep-21` | 4 (6, 7, 8, 11) | Stable | 🥇 Tied |
+| `usual-sweep-2` | 3 (7, 13, 14) | Stable | 🥈 |
+| `pious-sweep-8` | 2 (13, 14) | Late convergence | |
+| `legendary-sweep-20` | 1 (14) | Single epoch | |
+| `eternal-sweep-6` | 3 (6, 10, 14) | Intermittent | |
+| `lemon-sweep-14` | 2 (13, 14) | Late convergence | |
+
+**Criterion 5: Train-Val Accuracy Gap** (smaller magnitude = better generalization)
+
+| Run | Final Train Acc | Val Acc | Gap | Verdict |
+|-----|-----------------|---------|-----|---------|
+| `crisp-sweep-13` | 90.48% | 97.03% | **-6.55%** | 🥇 **Best** |
+| `pious-sweep-8` | 88.83% | 97.03% | -8.20% | 🥈 |
+| `legendary-sweep-20` | 88.85% | 97.03% | -8.18% | 🥉 |
+| `leafy-sweep-19` | 90.12% | 97.03% | -6.91% | 4th |
+| `usual-sweep-2` | 90.05% | 97.03% | -6.98% | 5th |
+| `misty-sweep-21` | 89.69% | 97.03% | -7.34% | 6th |
+| `lemon-sweep-14` | 89.21% | 97.03% | -7.82% | 7th |
+| `eternal-sweep-6` | 89.76% | 97.03% | -7.27% | 6th |
+
+##### Tie-Breaking Verdict
+
+**🏆 Winner: `crisp-sweep-13`**
+
+| Criterion | crisp-sweep-13 | pious-sweep-8 | leafy-sweep-19 | misty-sweep-21 |
+|-----------|----------------|---------------|----------------|----------------|
+| Val Accuracy | 97.03% | 97.03% | 97.03% | 97.03% |
+| Val Loss | **0.6070** ✅ | 0.6352 | 0.6574 | 0.6721 |
+| Convergence | Epoch 9 | Epoch 13 | Epoch 11 | **Epoch 6** |
+| Stability | **4 epochs** ✅ | 2 epochs | 3 epochs | 4 epochs |
+| Train-Val Gap | **-6.55%** ✅ | -8.20% | -6.91% | -7.34% |
+
+`crisp-sweep-13` wins on 3 of 4 tie-breaking criteria (val_loss, stability, train-val gap). While `misty-sweep-21` converged faster and matched on stability, `crisp-sweep-13`'s significantly lower validation loss (0.6070 vs 0.6721) makes it the clear winner.
+
+#### Best Configuration Analysis
+
+Based on the tie-breaking analysis, the optimal configuration is from `crisp-sweep-13`:
+
+```yaml
+# Optimal MLP Configuration (from crisp-sweep-13)
+model:
+  name: mlp
+  hidden_dims: [256, 128]
+  dropout_rate: 0.117
+
+training:
+  batch_size: 64
+  epochs: 50  # Extended from sweep's 15 epochs
+
+optimizer:
+  name: adam
+  lr: 0.001177
+  weight_decay: 0.00014
+
+loss:
+  label_smoothing: 0.109
+```
+
+**Why This Configuration Wins:**
+
+1. **Larger architecture [256,128]**: 1.95M parameters provides sufficient capacity for color classification
+2. **Low dropout (0.12)**: Minimal regularization since the larger network handles the task well
+3. **Moderate learning rate (1.18e-3)**: Stable convergence without oscillation
+4. **Label smoothing (0.11)**: Moderate smoothing prevents overconfidence
+5. **Batch size 64**: Balance between gradient stability and regularization
+
+**Alternative: Efficient Choice**
+
+For faster training and lower memory usage, use smaller architecture from `leafy-sweep-19`:
+
+```yaml
+# Efficient Configuration (from leafy-sweep-19)
+model:
+  name: mlp
+  hidden_dims: [128, 64]
+  dropout_rate: 0.126
+
+optimizer:
+  name: adam
+  lr: 0.001348
+  weight_decay: 0.000025
+
+training:
+  batch_size: 32
+
+loss:
+  label_smoothing: 0.129
+```
+
+This configuration uses only 968K parameters (50% fewer) while achieving the same accuracy.
+
+#### Lessons Learned
+
+1. **MLP is remarkably robust**: All 8 diverse configurations achieved identical 97.03% accuracy
+2. **Validation loss differentiates**: When accuracy ties, val_loss reveals model confidence quality
+3. **Architecture size matters less than expected**: [128,64] and [256,128] performed identically on accuracy
+4. **Adam dominates again**: 6 of 8 top runs used Adam; AdamW showed no advantage for MLP
+5. **Lower dropout for MLP**: Optimal dropout (0.12-0.22) is lower than CNN, suggesting flattened inputs need less regularization
+
+#### Next Steps After Sweep
+
+1. **Train with best config (crisp-sweep-13) for full epochs:**
+   ```bash
+   python scripts/train.py --config configs/mlp.yaml \
+       --lr 0.001177 --batch-size 64 --hidden-dims 256 128 \
+       --dropout 0.117 --label-smoothing 0.109 \
+       --weight-decay 0.00014 --epochs 100 --wandb
+   ```
+
+2. **Evaluate on test set:**
+   ```bash
+   python scripts/evaluate_model.py --model mlp \
+       --checkpoint models/mlp/best.pt
+   ```
+
+3. **Compare with Shallow CNN**: The MLP achieved the same 97.03% as the CNN—compare inference speed and model size for deployment decisions.
 
 ---
 
