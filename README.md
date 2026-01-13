@@ -81,6 +81,7 @@ The system captures cube images in two orientations (U,L,F then D,R,B faces) usi
   - [MLP Test Results](#mlp-test-results)
   - [Shallow CNN Test Results](#shallow-cnn-test-results)
   - [MobileNetV3 Test Results](#mobilenetv3-test-results)
+  - [Model Comparison Analysis](#model-comparison-analysis)
 
 - **[6. Installation & Quick Start](#installation--quick-start)**
   - [Prerequisites](#prerequisites)
@@ -900,13 +901,15 @@ CubeMaster provides three model architectures optimized for different deployment
 
 ### Model Comparison Summary
 
-| Model | Parameters | Input Size | Test Accuracy | Use Case |
-|-------|------------|------------|---------------|----------|
-| **MLP** | ~1.3M | 40×40 | **97.67%** | Baseline, interpretability |
-| **Shallow CNN** | ~466K | 40×40 | 96.12% | Edge deployment, real-time |
-| **MobileNetV3** | ~1.1M | 224×224 | 93.80% | Transfer learning baseline |
+| Model | Parameters | Input Size | Test Accuracy | Inference Time | Use Case |
+|-------|------------|------------|---------------|----------------|----------|
+| **MLP** 🏆 | ~1.3M | 40×40 | **97.67%** | **6.8 ms** | **Production (recommended)** |
+| **Shallow CNN** | ~466K | 40×40 | 96.12% | 18.4 ms | Constrained memory deployment |
+| **MobileNetV3** | ~1.1M | 224×224 | 93.80% | 189.5 ms | Transfer learning baseline |
 
-**Note**: MLP and Shallow CNN results are from 20 epochs with optimized hyperparameters from W&B sweeps (`crisp-sweep-13` and `hopeful-sweep-7` respectively). MobileNetV3 results are from 10 epochs with frozen backbone (Phase 1 only). Fine-tuning the full network typically improves accuracy to 97-99%.
+**Production Recommendation**: MLP achieves the highest accuracy (97.67%), fastest inference (148/sec), and lowest Red/Orange confusion (3 errors vs 5-6). See [Model Comparison Analysis](#model-comparison-analysis) for detailed benchmarks.
+
+**Note**: MLP and Shallow CNN results are from 20 epochs with optimized hyperparameters from W&B sweeps (`crisp-sweep-13` and `hopeful-sweep-7` respectively). MobileNetV3 results are from 10 epochs with frozen backbone (Phase 1 only).
 
 ### 1. MLP (Multi-Layer Perceptron)
 
@@ -1905,6 +1908,75 @@ Based on evaluation on the held-out test set (129 samples). For training details
 </p>
 
 **Analysis**: MobileNetV3 shows confusion primarily between Red→Orange (5 samples) and Green→Yellow (2 samples). With only the classifier head trained (backbone frozen), the model achieves 93.80% accuracy. Fine-tuning the full network (Phase 2) would likely improve results to 97-99%.
+
+### Model Comparison Analysis
+
+This section provides a comprehensive comparison of all three models to justify the production model selection.
+
+#### Performance Comparison
+
+| Model | Test Accuracy | Macro F1 | Correct/Total | Errors |
+|-------|---------------|----------|---------------|--------|
+| **MLP** | **97.67%** | **97.96%** | 126/129 | 3 |
+| Shallow CNN | 96.12% | 96.58% | 124/129 | 5 |
+| MobileNetV3 | 93.80% | 94.45% | 121/129 | 8 |
+
+#### Architecture & Efficiency
+
+| Model | Parameters | Model Size | Inference Time | Throughput | Input Size |
+|-------|------------|------------|----------------|------------|------------|
+| **MLP** | 1,262,726 | 4.82 MB | **6.8 ms** | **148/sec** | 40×40 |
+| Shallow CNN | 466,374 | **1.78 MB** | 18.4 ms | 54/sec | 40×40 |
+| MobileNetV3 | 1,076,262 | 4.11 MB | 189.5 ms | 5/sec | 224×224 |
+
+#### Critical Red↔Orange Confusion Analysis
+
+This is the most important metric for cube solving—Red/Orange confusion directly causes incorrect cube state detection, leading to invalid solver input or failed solves.
+
+| Model | Red→Orange | Orange→Red | Total R/O Errors | Other Errors |
+|-------|------------|------------|------------------|--------------|
+| **MLP** | 1 | 2 | **3** | 0 |
+| Shallow CNN | 5 | 0 | 5 | 0 |
+| MobileNetV3 | 5 | 1 | 6 | 2 (G→Y) |
+
+#### Per-Class F1 Score Comparison
+
+| Class | MLP F1 | Shallow CNN F1 | MobileNetV3 F1 |
+|-------|--------|----------------|----------------|
+| Blue (B) | 100% | 100% | 100% |
+| Green (G) | 100% | 100% | 95.0% |
+| Orange (O) | 93.6% | 90.6% | 88.5% |
+| Red (R) | 94.1% | 88.9% | 87.0% |
+| White (W) | 100% | 100% | 100% |
+| Yellow (Y) | 100% | 100% | 96.3% |
+
+#### Real-time Inference Capability
+
+For cube scanning, the robot captures 6 faces with 9 stickers each = 54 classifications per solve.
+
+| Model | Time for 54 Classifications | Acceptable for Real-time |
+|-------|----------------------------|--------------------------|
+| **MLP** | **367 ms** | ✅ Excellent |
+| Shallow CNN | 994 ms | ✅ Good |
+| MobileNetV3 | 10.2 sec | ❌ Too slow |
+
+#### Production Model Recommendation
+
+**🏆 MLP is the recommended model for CubeMaster production deployment.**
+
+| Criteria | MLP Score | Justification |
+|----------|-----------|---------------|
+| Accuracy | ⭐⭐⭐⭐⭐ | Highest test accuracy (97.67%), best macro F1 |
+| Speed | ⭐⭐⭐⭐⭐ | Fastest inference (6.8ms), 148/sec throughput |
+| R/O Confusion | ⭐⭐⭐⭐⭐ | Lowest critical error rate (3 vs 5-6) |
+| Deployment | ⭐⭐⭐⭐ | No convolutions = efficient on CPU |
+| Model Size | ⭐⭐⭐ | Moderate (4.82 MB), acceptable |
+
+**Trade-offs Considered:**
+1. **MLP vs Shallow CNN**: MLP wins on accuracy and speed despite larger model size
+2. **MLP vs MobileNetV3**: MobileNetV3's transfer learning didn't help—cube colors are too different from ImageNet classes
+
+**Alternative Recommendation**: If **model size is critical** (e.g., microcontroller deployment), use **Shallow CNN** (1.78 MB, 96.12% accuracy) and accept slightly higher R/O confusion.
 
 ---
 
