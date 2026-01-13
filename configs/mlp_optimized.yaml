@@ -1,0 +1,65 @@
+# MLP Optimized Configuration
+# Based on crisp-sweep-13 (best W&B sweep result)
+# LR=1.18e-3, batch=64, hidden=[256,128], dropout=0.117, label_smoothing=0.109, weight_decay=0.00014
+
+# Include base config
+_base_: "base.yaml"
+
+# Model Architecture
+model:
+  name: "mlp"
+  hidden_dims: [256, 128]
+  dropout_rate: 0.117
+
+# Training Settings
+training:
+  batch_size: 64
+  epochs: 20
+  early_stopping_patience: 15
+
+# Optimizer Settings (Adam with optimal sweep params)
+optimizer:
+  name: "adam"
+  lr: 0.001177
+  weight_decay: 0.00014
+
+# Scheduler Settings
+scheduler:
+  name: "cosine"
+  T_max: 100
+  eta_min: 0.000001
+
+# Loss Settings
+loss:
+  name: "cross_entropy"
+  label_smoothing: 0.109
+
+# Augmentation Settings
+augmentation:
+  train:
+    horizontal_flip: true
+    vertical_flip: false
+    rotation_limit: 15
+    brightness_limit: 0.2
+    contrast_limit: 0.2
+    hue_shift_limit: 10
+    saturation_limit: 20
+    gaussian_noise: true
+    normalize: true
+  val:
+    normalize: true
+
+# Output paths
+output:
+  model_dir: "models/mlp"
+  results_dir: "results/mlp"
+  tensorboard_dir: "results/tensorboard_logs/mlp"
+
+# Wandb Settings (disabled - use --wandb flag with proper auth)
+wandb:
+  enabled: false
+  project: "cubemaster"
+  name: "mlp_full_training_crisp13"
+  tags: ["mlp", "full_training", "optimized"]
+  notes: "Full 20-epoch training with crisp-sweep-13 hyperparameters"
+

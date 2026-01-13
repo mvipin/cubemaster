@@ -1,0 +1,64 @@
+# Shallow CNN Optimized Configuration
+# Based on hopeful-sweep-7 (best W&B sweep result)
+# LR=2.95e-4, batch=16, dropout=0.564, adamw, weight_decay=0.00015, label_smoothing=0.016, rotation=30
+
+# Include base config
+_base_: "base.yaml"
+
+# Model Architecture
+model:
+  name: "shallow_cnn"
+  dropout_rate: 0.564
+
+# Training Settings
+training:
+  batch_size: 16
+  epochs: 20
+  early_stopping_patience: 15
+
+# Optimizer Settings (AdamW with optimal sweep params)
+optimizer:
+  name: "adamw"
+  lr: 0.000295
+  weight_decay: 0.00015
+
+# Scheduler Settings
+scheduler:
+  name: "cosine"
+  T_max: 100
+  eta_min: 0.000001
+
+# Loss Settings
+loss:
+  name: "cross_entropy"
+  label_smoothing: 0.016
+
+# Augmentation Settings (rotation_limit=30 from sweep)
+augmentation:
+  train:
+    horizontal_flip: true
+    vertical_flip: false
+    rotation_limit: 30
+    brightness_limit: 0.13
+    contrast_limit: 0.2
+    hue_shift_limit: 10
+    saturation_limit: 20
+    gaussian_noise: true
+    normalize: true
+  val:
+    normalize: true
+
+# Output paths
+output:
+  model_dir: "models/shallow_cnn"
+  results_dir: "results/shallow_cnn"
+  tensorboard_dir: "results/tensorboard_logs/shallow_cnn"
+
+# Wandb Settings (disabled - use --wandb flag with proper auth)
+wandb:
+  enabled: false
+  project: "cubemaster"
+  name: "shallow_cnn_full_training_hopeful7"
+  tags: ["shallow_cnn", "full_training", "optimized"]
+  notes: "Full 20-epoch training with hopeful-sweep-7 hyperparameters"
+

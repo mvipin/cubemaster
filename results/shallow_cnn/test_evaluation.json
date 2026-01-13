@@ -1,12 +1,12 @@
 {
   "model_name": "shallow_cnn",
-  "checkpoint_epoch": 9,
+  "checkpoint_epoch": 6,
   "best_val_acc": 97.02970297029702,
   "test_metrics": {
-    "accuracy": 96.89922480620154,
-    "macro_precision": 97.61904761904763,
-    "macro_recall": 97.33333333333333,
-    "macro_f1": 97.26867335562987
+    "accuracy": 96.12403100775194,
+    "macro_precision": 97.12643678160919,
+    "macro_recall": 96.66666666666667,
+    "macro_f1": 96.575821104123
   },
   "per_class_metrics": {
     "B": {
@@ -22,15 +22,15 @@
       "support": 21
     },
     "O": {
-      "precision": 85.71428571428571,
+      "precision": 82.75862068965517,
       "recall": 100.0,
-      "f1": 92.3076923076923,
+      "f1": 90.56603773584906,
       "support": 24
     },
     "R": {
       "precision": 100.0,
-      "recall": 84.0,
-      "f1": 91.30434782608697,
+      "recall": 80.0,
+      "f1": 88.8888888888889,
       "support": 25
     },
     "W": {
@@ -74,8 +74,8 @@
     [
       0,
       0,
-      4,
-      21,
+      5,
+      20,
       0,
       0
     ],
@@ -97,5 +97,5 @@
     ]
   ],
   "total_samples": 129,
-  "correct_predictions": 125
+  "correct_predictions": 124
 }

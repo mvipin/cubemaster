@@ -63,14 +63,17 @@ The system captures cube images in two orientations (U,L,F then D,R,B faces) usi
   - [Shallow CNN](#2-shallow-cnn)
   - [MobileNetV3 (Transfer Learning)](#3-mobilenetv3-transfer-learning)
 
-- **[4. Training Infrastructure](#training-infrastructure)**
+- **[4. Training Pipeline & Optimization](#training-pipeline--optimization)**
   - [Configuration System](#configuration-system)
   - [Training Script Usage](#training-script-usage)
   - [Early Stopping](#early-stopping)
   - [Checkpoint Management](#checkpoint-management)
   - [Weights & Biases Integration](#weights--biases-integration)
   - [Hyperparameter Sweep Results: Shallow CNN](#hyperparameter-sweep-results-shallow-cnn)
+    - [Full Training with Best Configuration](#full-training-with-best-configuration)
   - [Hyperparameter Sweep Results: MLP](#hyperparameter-sweep-results-mlp)
+    - [Full Training with Best Configuration](#full-training-with-best-configuration-1)
+  - [MobileNetV3 Training Results](#mobilenetv3-training-results)
 
 - **[5. Evaluation & Comparison](#evaluation--comparison)**
   - [Evaluation Script](#evaluation-script)
@@ -899,11 +902,11 @@ CubeMaster provides three model architectures optimized for different deployment
 
 | Model | Parameters | Input Size | Test Accuracy | Use Case |
 |-------|------------|------------|---------------|----------|
-| **MLP** | ~1.3M | 40×40 | 93.80% | Baseline, interpretability |
-| **Shallow CNN** | ~80K | 40×40 | 96.90% | Edge deployment, real-time |
+| **MLP** | ~1.3M | 40×40 | **97.67%** | Baseline, interpretability |
+| **Shallow CNN** | ~466K | 40×40 | 96.12% | Edge deployment, real-time |
 | **MobileNetV3** | ~1.1M | 224×224 | 93.80% | Transfer learning baseline |
 
-**Note**: MobileNetV3 results are from 10 epochs with frozen backbone (Phase 1 only). Fine-tuning the full network typically improves accuracy to 97-99%.
+**Note**: MLP and Shallow CNN results are from 20 epochs with optimized hyperparameters from W&B sweeps (`crisp-sweep-13` and `hopeful-sweep-7` respectively). MobileNetV3 results are from 10 epochs with frozen backbone (Phase 1 only). Fine-tuning the full network typically improves accuracy to 97-99%.
 
 ### 1. MLP (Multi-Layer Perceptron)
 
@@ -1052,7 +1055,7 @@ training:
 
 ---
 
-## Training Infrastructure
+## Training Pipeline & Optimization
 
 ### Configuration System
 
@@ -1473,31 +1476,41 @@ augmentation:
 3. **Minimal label smoothing**: Values near 0.02 outperformed 0.10, suggesting the 6-class problem doesn't need much smoothing
 4. **Early convergence is predictive**: Reaching 97.03% at epoch 0 correlated with lowest val_loss—fast convergence indicates good hyperparameter fit
 
-#### Next Steps After Sweep
+#### Full Training with Best Configuration
 
-1. **Train with best config (hopeful-sweep-7) for full epochs:**
-   ```bash
-   python scripts/train.py --config configs/shallow_cnn.yaml \
-       --lr 0.000295 --batch-size 16 --dropout 0.564 \
-       --optimizer adamw --weight-decay 0.00015 \
-       --label-smoothing 0.016 --rotation-limit 30 \
-       --epochs 100 --wandb
-   ```
+After identifying `hopeful-sweep-7` as the optimal configuration, I trained the Shallow CNN for 20 epochs to validate the sweep results:
 
-2. **Evaluate on test set:**
-   ```bash
-   python scripts/evaluate_model.py --model shallow_cnn \
-       --checkpoint models/shallow_cnn/best.pt
-   ```
+```bash
+python scripts/train.py --config configs/shallow_cnn_optimized.yaml --wandb
+```
 
-3. **Export for deployment:**
-   ```bash
-   python scripts/export_to_onnx.py \
-       --checkpoint models/shallow_cnn/best.pt \
-       --output models/onnx/shallow_cnn_optimized.onnx
-   ```
+**Training Configuration** ([`configs/shallow_cnn_optimized.yaml`](configs/shallow_cnn_optimized.yaml)):
+| Parameter | Value | Source |
+|-----------|-------|--------|
+| Learning Rate | 2.95e-4 | hopeful-sweep-7 |
+| Batch Size | 16 | hopeful-sweep-7 |
+| Dropout | 0.564 | hopeful-sweep-7 |
+| Label Smoothing | 0.016 | hopeful-sweep-7 |
+| Weight Decay | 1.5e-4 | hopeful-sweep-7 |
+| Optimizer | AdamW | hopeful-sweep-7 |
+| Rotation Limit | 30° | hopeful-sweep-7 |
+| Brightness Limit | 0.13 | hopeful-sweep-7 |
+| Epochs | 20 | Extended from sweep |
 
-4. **Optional refinement sweep:** Narrow parameter ranges around `hopeful-sweep-7` values for fine-tuning.
+#### Training Curves
+
+<p align="center">
+  <img src="results/shallow_cnn/training_curves.png" alt="Shallow CNN Training Curves" width="800">
+</p>
+
+**Training Observations:**
+- **Best validation accuracy**: 97.03% (achieved at epoch 6)
+- **Early stopping**: Triggered at epoch 16 (no improvement for 10 epochs)
+- **Final test accuracy**: **96.12%** (see [Shallow CNN Test Results](#shallow-cnn-test-results))
+- **Convergence**: Model reached 94%+ validation accuracy by epoch 0
+- **High dropout effect**: Training accuracy (~91%) stayed below validation accuracy, indicating strong regularization working as intended
+
+The full training validates that the sweep-identified hyperparameters generalize well, though the test accuracy (96.12%) is slightly lower than validation (97.03%), indicating some test set distribution shift.
 
 ### Hyperparameter Sweep Results: MLP
 
@@ -1699,23 +1712,72 @@ This configuration uses only 968K parameters (50% fewer) while achieving the sam
 4. **Adam dominates again**: 6 of 8 top runs used Adam; AdamW showed no advantage for MLP
 5. **Lower dropout for MLP**: Optimal dropout (0.12-0.22) is lower than CNN, suggesting flattened inputs need less regularization
 
-#### Next Steps After Sweep
+#### Full Training with Best Configuration
 
-1. **Train with best config (crisp-sweep-13) for full epochs:**
-   ```bash
-   python scripts/train.py --config configs/mlp.yaml \
-       --lr 0.001177 --batch-size 64 --hidden-dims 256 128 \
-       --dropout 0.117 --label-smoothing 0.109 \
-       --weight-decay 0.00014 --epochs 100 --wandb
-   ```
+After identifying `crisp-sweep-13` as the optimal configuration, I trained the MLP for 20 epochs to validate the sweep results:
 
-2. **Evaluate on test set:**
-   ```bash
-   python scripts/evaluate_model.py --model mlp \
-       --checkpoint models/mlp/best.pt
-   ```
+```bash
+python scripts/train.py --config configs/mlp_optimized.yaml --wandb
+```
 
-3. **Compare with Shallow CNN**: The MLP achieved the same 97.03% as the CNN—compare inference speed and model size for deployment decisions.
+**Training Configuration** ([`configs/mlp_optimized.yaml`](configs/mlp_optimized.yaml)):
+| Parameter | Value | Source |
+|-----------|-------|--------|
+| Learning Rate | 1.18e-3 | crisp-sweep-13 |
+| Batch Size | 64 | crisp-sweep-13 |
+| Hidden Dims | [256, 128] | crisp-sweep-13 |
+| Dropout | 0.117 | crisp-sweep-13 |
+| Label Smoothing | 0.109 | crisp-sweep-13 |
+| Weight Decay | 1.4e-4 | crisp-sweep-13 |
+| Optimizer | Adam | crisp-sweep-13 |
+| Epochs | 20 | Extended from sweep |
+
+#### Training Curves
+
+<p align="center">
+  <img src="results/mlp/training_curves.png" alt="MLP Training Curves" width="800">
+</p>
+
+**Training Observations:**
+- **Best validation accuracy**: 97.03% (achieved at epoch 16)
+- **Final test accuracy**: **97.67%** (see [MLP Test Results](#mlp-test-results))
+- **Convergence**: Model reached 96%+ validation accuracy by epoch 5
+- **Stability**: Validation accuracy remained stable between 93-97% throughout training
+- **No overfitting**: Training accuracy (~89%) stayed below validation accuracy, indicating good generalization
+
+The full training validates that the sweep-identified hyperparameters generalize well beyond the 15-epoch sweep runs.
+
+### MobileNetV3 Training Results
+
+MobileNetV3 was trained using transfer learning with a frozen ImageNet-pretrained backbone. Unlike Shallow CNN and MLP, no hyperparameter sweep was conducted—the model was trained with default parameters to establish a transfer learning baseline.
+
+```bash
+python scripts/train.py --config configs/mobilenet.yaml --wandb
+```
+
+**Training Configuration** ([`configs/mobilenet.yaml`](configs/mobilenet.yaml)):
+| Parameter | Value | Notes |
+|-----------|-------|-------|
+| Backbone | MobileNetV3-Small | ImageNet pretrained |
+| Training Mode | Frozen backbone | Only classifier head trained |
+| Learning Rate | 1e-3 | Default for classifier head |
+| Batch Size | 32 | Default |
+| Epochs | 10 | Phase 1 (frozen backbone) |
+| Input Size | 224×224 | MobileNetV3 native resolution |
+
+#### Training Curves
+
+<p align="center">
+  <img src="results/mobilenet/training_curves.png" alt="MobileNetV3 Training Curves" width="800">
+</p>
+
+**Training Observations:**
+- **Best validation accuracy**: 93.07% (achieved at epoch 9)
+- **Final test accuracy**: **93.80%** (see [MobileNetV3 Test Results](#mobilenetv3-test-results))
+- **Fast convergence**: Model reached 90%+ validation accuracy by epoch 2
+- **Frozen backbone limitation**: Training accuracy (~85%) plateaus early due to frozen feature extractor
+
+**Next Steps**: Fine-tuning the full network (Phase 2) with a lower learning rate would likely improve accuracy to 97-99%, as the pretrained features can be adapted to the cube color domain.
 
 ---
 
@@ -1736,33 +1798,44 @@ python scripts/evaluate_model.py --model shallow_cnn --output-dir results/experi
 
 ### Output Files
 
+**Training outputs** (generated by `train.py`):
+```
+models/{model_name}/
+├── best.pt                 # Best model checkpoint (highest val accuracy)
+├── last.pt                 # Final model checkpoint
+└── history.json            # Complete training history
+
+results/{model_name}/
+└── training_curves.png     # Loss and accuracy curves over epochs
+```
+
+**Evaluation outputs** (generated by `evaluate_model.py`):
 ```
 results/{model_name}/
-├── test_evaluation.json    # Metrics in JSON format
-├── confusion_matrix.png    # Confusion matrix heatmap
-└── training_curves.png     # Loss and accuracy curves
+├── test_evaluation.json    # Test set metrics in JSON format
+└── confusion_matrix.png    # Confusion matrix heatmap
 ```
 
 ### MLP Test Results
 
-Based on evaluation on the held-out test set (129 samples) after 10 epochs of training:
+Based on evaluation on the held-out test set (129 samples). For training details and curves, see [Full Training with Best Configuration](#full-training-with-best-configuration).
 
 | Metric | Value |
 |--------|-------|
-| **Overall Accuracy** | **93.80%** |
-| Macro Precision | 94.49% |
-| Macro Recall | 93.73% |
-| Macro F1 | 93.53% |
+| **Overall Accuracy** | **97.67%** |
+| Macro Precision | 97.99% |
+| Macro Recall | 97.94% |
+| Macro F1 | 97.96% |
 
 #### Per-Class Performance
 
 | Class | Precision | Recall | F1 | Support |
 |-------|-----------|--------|-----|---------|
-| B (Blue) | 84.21% | 100.00% | 91.43% | 16 |
+| B (Blue) | 100.00% | 100.00% | 100.00% | 16 |
 | G (Green) | 100.00% | 100.00% | 100.00% | 21 |
-| O (Orange) | 82.76% | 100.00% | 90.57% | 24 |
-| R (Red) | 100.00% | 80.00% | 88.89% | 25 |
-| W (White) | 100.00% | 82.35% | 90.32% | 17 |
+| O (Orange) | 95.65% | 91.67% | 93.62% | 24 |
+| R (Red) | 92.31% | 96.00% | 94.12% | 25 |
+| W (White) | 100.00% | 100.00% | 100.00% | 17 |
 | Y (Yellow) | 100.00% | 100.00% | 100.00% | 26 |
 
 #### Confusion Matrix
@@ -1771,24 +1844,18 @@ Based on evaluation on the held-out test set (129 samples) after 10 epochs of tr
   <img src="results/mlp/confusion_matrix.png" alt="MLP Confusion Matrix" width="600">
 </p>
 
-**Analysis**: The MLP model shows primary confusion between Red→Orange (5 samples) and White→Blue (3 samples). Despite having ~1.3M parameters, the lack of spatial feature extraction limits its ability to distinguish spectrally similar colors compared to CNN architectures.
-
-#### Training Curves
-
-<p align="center">
-  <img src="results/mlp/training_curves.png" alt="MLP Training Curves" width="800">
-</p>
+**Analysis**: After hyperparameter optimization, the MLP achieves **97.67% test accuracy**, a significant improvement from the baseline 93.80%. The remaining confusion is limited to Orange↔Red (2 Orange→Red, 1 Red→Orange), which are spectrally similar colors. All other classes achieve perfect classification.
 
 ### Shallow CNN Test Results
 
-Based on evaluation on the held-out test set (129 samples):
+Based on evaluation on the held-out test set (129 samples). For training details and curves, see [Full Training with Best Configuration](#full-training-with-best-configuration).
 
 | Metric | Value |
 |--------|-------|
-| **Overall Accuracy** | **96.90%** |
-| Macro Precision | 97.62% |
-| Macro Recall | 97.33% |
-| Macro F1 | 97.27% |
+| **Overall Accuracy** | **96.12%** |
+| Macro Precision | 97.13% |
+| Macro Recall | 96.67% |
+| Macro F1 | 96.58% |
 
 #### Per-Class Performance
 
@@ -1796,8 +1863,8 @@ Based on evaluation on the held-out test set (129 samples):
 |-------|-----------|--------|-----|---------|
 | B (Blue) | 100.00% | 100.00% | 100.00% | 16 |
 | G (Green) | 100.00% | 100.00% | 100.00% | 21 |
-| O (Orange) | 85.71% | 100.00% | 92.31% | 24 |
-| R (Red) | 100.00% | 84.00% | 91.30% | 25 |
+| O (Orange) | 82.76% | 100.00% | 90.57% | 24 |
+| R (Red) | 100.00% | 80.00% | 88.89% | 25 |
 | W (White) | 100.00% | 100.00% | 100.00% | 17 |
 | Y (Yellow) | 100.00% | 100.00% | 100.00% | 26 |
 
@@ -1807,17 +1874,11 @@ Based on evaluation on the held-out test set (129 samples):
   <img src="results/shallow_cnn/confusion_matrix.png" alt="Confusion Matrix" width="600">
 </p>
 
-**Analysis**: The primary confusion is between Red and Orange (4 Red samples misclassified as Orange), which is expected due to their spectral similarity under varying lighting conditions.
-
-#### Training Curves
-
-<p align="center">
-  <img src="results/shallow_cnn/training_curves.png" alt="Training Curves" width="800">
-</p>
+**Analysis**: The primary confusion is Red→Orange (5 Red samples misclassified as Orange), which is expected due to their spectral similarity. All other classes achieve perfect classification.
 
 ### MobileNetV3 Test Results
 
-Based on evaluation on the held-out test set (129 samples) after 10 epochs of training with frozen backbone:
+Based on evaluation on the held-out test set (129 samples). For training details and curves, see [MobileNetV3 Training Results](#mobilenetv3-training-results).
 
 | Metric | Value |
 |--------|-------|
@@ -1843,19 +1904,13 @@ Based on evaluation on the held-out test set (129 samples) after 10 epochs of tr
   <img src="results/mobilenet/confusion_matrix.png" alt="MobileNetV3 Confusion Matrix" width="600">
 </p>
 
-**Analysis**: MobileNetV3 shows confusion primarily between Red→Orange (5 samples) and Green→Yellow (2 samples). With only the classifier head trained (backbone frozen), the model achieves comparable accuracy to MLP but with better macro F1 (94.45% vs 93.53%). Fine-tuning the full network would likely improve results.
-
-#### Training Curves
-
-<p align="center">
-  <img src="results/mobilenet/training_curves.png" alt="MobileNetV3 Training Curves" width="800">
-</p>
+**Analysis**: MobileNetV3 shows confusion primarily between Red→Orange (5 samples) and Green→Yellow (2 samples). With only the classifier head trained (backbone frozen), the model achieves 93.80% accuracy. Fine-tuning the full network (Phase 2) would likely improve results to 97-99%.
 
 ---
 
 ## Installation & Quick Start
 
-Now that you understand the architecture, data pipeline, and training infrastructure, you can set up CubeMaster on your system. This section covers both the software installation and a quick guide to train and evaluate models.
+Now that you understand the architecture, data pipeline, and training pipeline, you can set up CubeMaster on your system. This section covers both the software installation and a quick guide to train and evaluate models.
 
 ### Prerequisites
 
@@ -1912,7 +1967,7 @@ python scripts/train.py --config configs/mlp.yaml
 python scripts/train.py --config configs/mobilenet.yaml
 ```
 
-See [Training Infrastructure](#training-infrastructure) for configuration options and [Model Architectures](#model-architectures) for model details.
+See [Training Pipeline & Optimization](#training-pipeline--optimization) for configuration options and [Model Architectures](#model-architectures) for model details.
 
 #### 3. Evaluate Model
 

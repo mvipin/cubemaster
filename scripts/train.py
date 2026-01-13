@@ -32,6 +32,7 @@ from cubemaster.models.mobilenet import MobileNetV3Classifier
 from cubemaster.training.dataset import CubeColorDataset
 from cubemaster.training.augmentations import get_train_transforms, get_val_transforms
 from cubemaster.training.trainer import Trainer, EarlyStopping
+from cubemaster.visualization import plot_training_curves
 
 # Optional wandb import
 try:
@@ -384,6 +385,18 @@ def main():
     print("=" * 80)
     print(f"Training complete. Best val accuracy: {trainer.best_val_acc:.2f}%")
     print(f"Checkpoints saved to: {checkpoint_dir}")
+
+    # Generate training curves
+    model_name = cfg["model"]["name"]
+    results_dir = Path(f"results/{model_name}")
+    results_dir.mkdir(parents=True, exist_ok=True)
+    curves_path = results_dir / "training_curves.png"
+    print(f"\nGenerating training curves...")
+    plot_training_curves(
+        history,
+        curves_path,
+        title=f"{model_name.upper()} - Training Curves",
+    )
 
     # Finish wandb run
     if use_wandb and WANDB_AVAILABLE:
