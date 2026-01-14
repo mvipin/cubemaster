@@ -82,6 +82,7 @@ The system captures cube images in two orientations (U,L,F then D,R,B faces) usi
   - [Shallow CNN Test Results](#shallow-cnn-test-results)
   - [MobileNetV3 Test Results](#mobilenetv3-test-results)
   - [Model Comparison Analysis](#model-comparison-analysis)
+  - [ONNX Export & Deployment](#onnx-export--deployment)
 
 - **[6. Installation & Quick Start](#installation--quick-start)**
   - [Prerequisites](#prerequisites)
@@ -1977,6 +1978,328 @@ For cube scanning, the robot captures 6 faces with 9 stickers each = 54 classifi
 2. **MLP vs MobileNetV3**: MobileNetV3's transfer learning didn't help—cube colors are too different from ImageNet classes
 
 **Alternative Recommendation**: If **model size is critical** (e.g., microcontroller deployment), use **Shallow CNN** (1.78 MB, 96.12% accuracy) and accept slightly higher R/O confusion.
+
+### ONNX Export & Deployment
+
+This section covers exporting trained models to ONNX format for production deployment on edge devices like Raspberry Pi, Jetson Nano, or other embedded systems.
+
+#### Prerequisites
+
+Install ONNX and ONNX Runtime:
+
+```bash
+pip install onnx onnxruntime
+```
+
+#### Export Commands
+
+**Export MLP (Recommended Production Model):**
+
+```bash
+python scripts/export_to_onnx.py \
+    --checkpoint models/mlp/best.pt \
+    --model mlp \
+    --input-size 40 40 \
+    -v
+```
+
+**Export Shallow CNN:**
+
+```bash
+python scripts/export_to_onnx.py \
+    --checkpoint models/shallow_cnn/best.pt \
+    --model shallow_cnn \
+    --input-size 40 40 \
+    -v
+```
+
+**Export MobileNetV3:**
+
+```bash
+python scripts/export_to_onnx.py \
+    --checkpoint models/mobilenet/best.pt \
+    --model mobilenet \
+    --input-size 224 224 \
+    -v
+```
+
+#### Key Parameters
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `--checkpoint` | Path to PyTorch `.pt` or `.pth` file | Required |
+| `--model` | Architecture: `mlp`, `shallow_cnn`, or `mobilenet` | Auto-detect |
+| `--input-size` | Input dimensions (HEIGHT WIDTH) | 50 50 |
+| `--output` | Custom output path | Same dir as checkpoint |
+| `--opset-version` | ONNX opset version | 11 |
+| `--no-validate` | Skip ONNX structural validation | False |
+| `--no-test-inference` | Skip ONNX Runtime inference test | False |
+| `-v, --verbose` | Show detailed export graph | False |
+
+#### Advanced Export Examples
+
+```bash
+# Custom output path
+python scripts/export_to_onnx.py \
+    --checkpoint models/mlp/best.pt \
+    --model mlp \
+    --output models/onnx/cubemaster_mlp.onnx \
+    --input-size 40 40
+
+# Use newer ONNX opset for advanced operators
+python scripts/export_to_onnx.py \
+    --checkpoint models/mobilenet/best.pt \
+    --model mobilenet \
+    --opset-version 17 \
+    --input-size 224 224
+
+# Quick export without validation (faster)
+python scripts/export_to_onnx.py \
+    --checkpoint models/mlp/best.pt \
+    --model mlp \
+    --no-validate \
+    --no-test-inference
+```
+
+#### File Size Comparison
+
+| Model | PyTorch (.pt) | ONNX (.onnx) | Reduction |
+|-------|---------------|--------------|-----------|
+| **MLP** | 15.0 MB | 4.9 MB | **67%** |
+| Shallow CNN | 5.4 MB | 1.9 MB | 65% |
+| MobileNetV3 | 5.4 MB | 4.8 MB | 11% |
+
+**Note**: PyTorch checkpoints include optimizer state, training metadata, and use Python pickle format. ONNX files contain only the inference graph with optimized weight storage.
+
+#### ONNX Model Validation
+
+The export script automatically validates the ONNX model. For manual validation:
+
+```python
+import onnx
+
+# Load and check model structure
+model = onnx.load("models/mlp/best.onnx")
+onnx.checker.check_model(model)
+print("✅ Model structure valid")
+
+# Print model info
+print(f"IR version: {model.ir_version}")
+print(f"Opset version: {model.opset_import[0].version}")
+print(f"Inputs: {[i.name for i in model.graph.input]}")
+print(f"Outputs: {[o.name for o in model.graph.output]}")
+```
+
+#### ONNX Runtime Inference Test
+
+```python
+import onnxruntime as ort
+import numpy as np
+
+# Create inference session
+session = ort.InferenceSession(
+    "models/mlp/best.onnx",
+    providers=['CPUExecutionProvider']
+)
+
+# Get input/output names
+input_name = session.get_inputs()[0].name   # 'input'
+output_name = session.get_outputs()[0].name  # 'output'
+
+# Run inference (input: NCHW format, normalized [0,1])
+image = np.random.rand(1, 3, 40, 40).astype(np.float32)
+logits = session.run([output_name], {input_name: image})[0]
+
+# Get prediction
+class_names = ['B', 'G', 'O', 'R', 'W', 'Y']
+pred_idx = np.argmax(logits, axis=1)[0]
+print(f"Predicted: {class_names[pred_idx]}")
+```
+
+#### ONNX Runtime Performance
+
+| Model | PyTorch (CPU) | ONNX Runtime | Speedup | 54 Stickers |
+|-------|---------------|--------------|---------|-------------|
+| **MLP** | 6.8 ms | **1.6 ms** | **4.2×** | **88 ms** |
+| Shallow CNN | 18.4 ms | 5.1 ms | 3.6× | 276 ms |
+| MobileNetV3 | 189.5 ms | 40.8 ms | 4.6× | 2,203 ms |
+
+ONNX Runtime provides 3.6-4.6× speedup over native PyTorch inference on CPU.
+
+#### Raspberry Pi Deployment
+
+**Installation on Raspberry Pi:**
+
+```bash
+# Raspberry Pi OS (64-bit recommended)
+pip install onnxruntime
+
+# For Pi 4/5 with ARM64
+pip install onnxruntime
+
+# For older Pi models (32-bit ARM)
+# Use community builds or build from source
+```
+
+**Optimized Inference on Pi:**
+
+```python
+import onnxruntime as ort
+import numpy as np
+import cv2
+
+# Session options for resource-constrained devices
+sess_options = ort.SessionOptions()
+sess_options.intra_op_num_threads = 4  # Adjust to Pi core count
+sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+
+# Create session
+session = ort.InferenceSession(
+    "cubemaster_mlp.onnx",
+    sess_options=sess_options,
+    providers=['CPUExecutionProvider']
+)
+
+def preprocess_sticker(image: np.ndarray, size: tuple = (40, 40)) -> np.ndarray:
+    """Preprocess a sticker image for ONNX inference."""
+    # Resize
+    resized = cv2.resize(image, size)
+    # Convert BGR to RGB if needed
+    rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
+    # Normalize to [0, 1] and convert to NCHW
+    normalized = rgb.astype(np.float32) / 255.0
+    nchw = np.transpose(normalized, (2, 0, 1))
+    return np.expand_dims(nchw, axis=0)
+
+def classify_sticker(session, image: np.ndarray) -> tuple:
+    """Classify a single sticker."""
+    input_name = session.get_inputs()[0].name
+    preprocessed = preprocess_sticker(image)
+    logits = session.run(None, {input_name: preprocessed})[0]
+
+    class_names = ['B', 'G', 'O', 'R', 'W', 'Y']
+    pred_idx = np.argmax(logits[0])
+    confidence = np.exp(logits[0]) / np.sum(np.exp(logits[0]))
+
+    return class_names[pred_idx], confidence[pred_idx]
+
+# Example usage
+# sticker_img = cv2.imread("sticker.jpg")
+# color, conf = classify_sticker(session, sticker_img)
+# print(f"Color: {color}, Confidence: {conf:.2%}")
+```
+
+#### Jetson Nano / Orin Deployment
+
+For NVIDIA Jetson devices, use TensorRT for optimal performance:
+
+```bash
+# Install TensorRT provider
+pip install onnxruntime-gpu
+
+# Or use tensorrt package directly
+# Convert ONNX to TensorRT engine for maximum performance
+```
+
+```python
+import onnxruntime as ort
+
+# Use TensorRT execution provider on Jetson
+session = ort.InferenceSession(
+    "cubemaster_mlp.onnx",
+    providers=['TensorrtExecutionProvider', 'CUDAExecutionProvider', 'CPUExecutionProvider']
+)
+```
+
+#### Performance Optimization Tips
+
+1. **Batch Processing**: Process multiple stickers in a single inference call
+   ```python
+   # Batch of 9 stickers (one cube face)
+   batch = np.stack([preprocess_sticker(s) for s in stickers])
+   logits = session.run(None, {input_name: batch.squeeze(1)})[0]
+   ```
+
+2. **Use Smaller Models**: MLP (1.6 ms) is 3× faster than Shallow CNN (5.1 ms)
+
+3. **Reduce Input Size**: 40×40 is optimal; larger inputs don't improve accuracy
+
+4. **Quantization** (INT8): Reduces model size and speeds up inference
+   ```bash
+   # Use ONNX Runtime quantization tools
+   python -m onnxruntime.quantization.preprocess \
+       --input models/mlp/best.onnx \
+       --output models/mlp/best_prep.onnx
+   ```
+
+5. **Pin Threads**: On multi-core systems, bind threads to specific cores
+   ```python
+   sess_options.intra_op_num_threads = 4
+   sess_options.inter_op_num_threads = 1
+   ```
+
+#### Complete Cube Classification Example
+
+```python
+import onnxruntime as ort
+import numpy as np
+import cv2
+
+class CubeClassifier:
+    """ONNX-based cube sticker classifier for production deployment."""
+
+    CLASS_NAMES = ['B', 'G', 'O', 'R', 'W', 'Y']
+
+    def __init__(self, model_path: str, input_size: tuple = (40, 40)):
+        sess_options = ort.SessionOptions()
+        sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+
+        self.session = ort.InferenceSession(
+            model_path,
+            sess_options=sess_options,
+            providers=['CPUExecutionProvider']
+        )
+        self.input_name = self.session.get_inputs()[0].name
+        self.input_size = input_size
+
+    def preprocess(self, images: list) -> np.ndarray:
+        """Preprocess a batch of sticker images."""
+        batch = []
+        for img in images:
+            resized = cv2.resize(img, self.input_size)
+            rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
+            normalized = rgb.astype(np.float32) / 255.0
+            nchw = np.transpose(normalized, (2, 0, 1))
+            batch.append(nchw)
+        return np.array(batch)
+
+    def classify_batch(self, images: list) -> list:
+        """Classify a batch of sticker images."""
+        batch = self.preprocess(images)
+        logits = self.session.run(None, {self.input_name: batch})[0]
+        predictions = np.argmax(logits, axis=1)
+        return [self.CLASS_NAMES[p] for p in predictions]
+
+    def classify_face(self, face_image: np.ndarray, grid: tuple = (3, 3)) -> str:
+        """Classify all 9 stickers on a cube face."""
+        h, w = face_image.shape[:2]
+        cell_h, cell_w = h // grid[0], w // grid[1]
+
+        stickers = []
+        for i in range(grid[0]):
+            for j in range(grid[1]):
+                y1, y2 = i * cell_h, (i + 1) * cell_h
+                x1, x2 = j * cell_w, (j + 1) * cell_w
+                stickers.append(face_image[y1:y2, x1:x2])
+
+        colors = self.classify_batch(stickers)
+        return ''.join(colors)  # e.g., "WBWGRGORY"
+
+# Usage
+# classifier = CubeClassifier("models/mlp/best.onnx")
+# face_colors = classifier.classify_face(face_image)
+# print(f"Face: {face_colors}")  # "WBWGRGORY"
+```
 
 ---
 
