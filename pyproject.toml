@@ -59,11 +59,6 @@ dev = [
 ]
 all = ["cubemaster[training,export,profiling,dev]"]
 
-[project.scripts]
-cubemaster-train = "cubemaster.training.train:main"
-cubemaster-evaluate = "cubemaster.evaluation.evaluate:main"
-cubemaster-predict = "cubemaster.inference.predict:main"
-
 [tool.setuptools.packages.find]
 where = ["src"]
 
